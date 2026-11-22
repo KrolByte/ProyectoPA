@@ -1,63 +1,599 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pronóstico</title>
-<!--
-  ESQUELETO DEL FRONTEND
-  ======================
-  Esta página ya funciona: pide el pronóstico a la API y lo muestra en una
-  tabla sin formato. Tu trabajo es convertirla en una interfaz de verdad.
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pronóstico SARIMA — KrolByte</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --canvas: #f2edf5;
+      --surface: #ffffff;
+      --ink: #121212;
+      --muted: #544e57;
+      --acid: #e39df9;
+      --volt: #7c0048;
+      --border: 2px solid #121212;
+      --shadow: 4px 4px 0px #121212;
+      --shadow-sm: 2px 2px 0px #121212;
+    }
 
-  Requisitos mínimos (ver README, Fase 2):
-    1. Una gráfica con el histórico, el pronóstico y el intervalo de confianza.
-    2. Las horas en hora de Colombia (la API las entrega en UTC, con "Z").
-    3. Al menos un indicador destacado (p.ej. valor de la próxima hora,
-       máximo esperado, hora del último dato).
-    4. Controles para elegir cuántas horas pronosticar.
-    5. Un mensaje claro cuando la API responde con error.
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-  Puedes usar cualquier librería de gráficas cargada desde un CDN
-  (Chart.js, Plotly, ECharts...) y poner archivos .css o .js en esta misma
-  carpeta: se sirven en /static/<nombre>.
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background-color: var(--canvas);
+      background-image: radial-gradient(#c7c2b8 1px, transparent 1px);
+      background-size: 20px 20px;
+      color: var(--ink);
+      padding: 28px 20px;
+      min-height: 100vh;
+    }
 
-  Endpoints disponibles (pruébalos en /docs):
-    GET /api/prediccion?horas=12&historia=48&confianza=0.95
-    GET /api/historico?horas=48
-    GET /api/modelo
-    GET /api/salud
--->
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+
+    /* Barra superior tipo etiqueta técnica */
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      background: var(--ink);
+      color: var(--canvas);
+      padding: 8px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 18px;
+    }
+
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      background: #e635a2;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .author-tag {
+      background: var(--acid);
+      color: var(--ink);
+      padding: 2px 10px;
+      font-weight: 700;
+    }
+
+    /* Encabezado principal */
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: stretch;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .title-block {
+      background: var(--surface);
+      border: var(--border);
+      box-shadow: var(--shadow);
+      padding: 18px 22px;
+      flex: 1 1 520px;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--volt);
+      margin-bottom: 4px;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .controls {
+      background: var(--acid);
+      border: var(--border);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      flex: 0 1 320px;
+    }
+
+    .controls label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .control-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    select, button {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 10px 12px;
+      border: var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    select { flex: 1; }
+
+    button {
+      background: var(--ink);
+      color: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--volt);
+      color: var(--surface);
+      transform: translate(-1px, -1px);
+    }
+
+    button:active:not(:disabled) {
+      transform: translate(2px, 2px);
+      box-shadow: none;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    /* Alerta de error */
+    .error-banner {
+      display: none;
+      background: #fee2e2;
+      border: var(--border);
+      border-left: 8px solid #dc2626;
+      box-shadow: var(--shadow);
+      color: #7f1d1d;
+      padding: 14px 18px;
+      margin-bottom: 22px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+
+    /* Tarjetas KPI */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: var(--border);
+      box-shadow: var(--shadow);
+      padding: 16px 18px;
+      position: relative;
+    }
+
+    .kpi-card.highlight {
+      background: #fff7ed;
+    }
+
+    .kpi-index {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .kpi-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.85rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin: 4px 0 8px;
+    }
+
+    .kpi-card.highlight .kpi-value {
+      color: var(--volt);
+    }
+
+    .kpi-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px dashed #cbd5e1;
+      padding-top: 6px;
+    }
+
+    /* Contenedor de la gráfica */
+    .chart-card {
+      background: var(--surface);
+      border: var(--border);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .chart-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid var(--ink);
+    }
+
+    .chart-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .status-pill {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      background: var(--canvas);
+      border: 1.5px solid var(--ink);
+      padding: 4px 10px;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 410px;
+      width: 100%;
+    }
+
+    footer {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+  </style>
 </head>
 <body>
-  <h1>Pronóstico</h1>
-  <p id="estado">Consultando la API…</p>
-  <table border="1" cellpadding="4">
-    <thead><tr><th>tiempo (UTC)</th><th>prediccion</th><th>limite_inferior</th><th>limite_superior</th></tr></thead>
-    <tbody id="filas"></tbody>
-  </table>
+  <div class="container">
+    <div class="topbar">
+      <div class="badge-live">
+        <span class="dot"></span>
+        <span>TELEMETRÍA INFLUXDB // SERVER.CONSUMO_TOTAL</span>
+      </div>
+      <div class="author-tag">DISEÑADO POR: KAROL REYES</div>
+    </div>
 
-<script>
-async function cargar() {
-  const estado = document.getElementById("estado");
-  try {
-    const respuesta = await fetch("/api/prediccion?horas=12&historia=48");
-    const datos = await respuesta.json();
-    if (!respuesta.ok) throw new Error(datos.detail);
+    <header>
+      <div class="title-block">
+        <div class="eyebrow">COMPUTACIÓN AVANZADA // MODELO SARIMA</div>
+        <h1>Monitor predictivo de consumo eléctrico</h1>
+        <p class="subtitle">Sincronizado a la hora oficial de Colombia (America/Bogota · UTC-5)</p>
+      </div>
 
-    // datos.historico  -> [{tiempo, valor}, ...]            (horas pasadas)
-    // datos.prediccion -> [{tiempo, prediccion, limite_inferior, limite_superior}, ...]
-    console.log(datos);   // abre la consola del navegador (F12) para explorarlo
+      <div class="controls">
+        <label for="horasSelect">Horizonte de pronóstico</label>
+        <div class="control-row">
+          <select id="horasSelect">
+            <option value="6">+06 horas</option>
+            <option value="12" selected>+12 horas</option>
+            <option value="24">+24 horas</option>
+            <option value="36">+36 horas</option>
+            <option value="48">+48 horas</option>
+          </select>
+          <button id="btnActualizar" onclick="cargarPronostico()">EJECUTAR</button>
+        </div>
+      </div>
+    </header>
 
-    document.getElementById("filas").innerHTML = datos.prediccion.map(p =>
-      `<tr><td>${p.tiempo}</td><td>${p.prediccion}</td><td>${p.limite_inferior}</td><td>${p.limite_superior}</td></tr>`
-    ).join("");
-    estado.textContent = `Último dato real: ${datos.ultima_observacion}`;
-  } catch (error) {
-    estado.textContent = "Error: " + error.message;
-  }
-}
-cargar();
-</script>
+    <div id="errorBox" class="error-banner" role="alert"></div>
+
+    <section class="kpis">
+      <div class="kpi-card highlight">
+        <div class="kpi-index"><span>01 // PRÓXIMA HORA</span><span>SARIMA</span></div>
+        <div class="kpi-value" id="kpiProxima">--</div>
+        <div class="kpi-sub" id="kpiProximaHora">Hora COL: --</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-index"><span>02 // PICO ESPERADO</span><span>MAX</span></div>
+        <div class="kpi-value" id="kpiMaximo">--</div>
+        <div class="kpi-sub" id="kpiMaximoHora">Hora COL: --</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-index"><span>03 // ÚLTIMA LECTURA</span><span>REAL</span></div>
+        <div class="kpi-value" id="kpiUltimo">--</div>
+        <div class="kpi-sub" id="kpiUltimoHora">Hora COL: --</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-index"><span>04 // CALIDAD SERIE</span><span>SENSOR</span></div>
+        <div class="kpi-value" id="kpiRellenadas">--</div>
+        <div class="kpi-sub" id="kpiContexto">Contexto: -- h</div>
+      </div>
+    </section>
+
+    <section class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Curva histórica (máx. 48 hrs) vs. Proyección e intervalo de confianza (95%)</div>
+        <span class="status-pill" id="estadoCarga">INICIALIZANDO...</span>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="graficaPronostico"></canvas>
+      </div>
+    </section>
+
+    <footer>
+      <span>FASTAPI + SARIMA + DOCKER ENGINE</span>
+      <span>AUTORÍA: Karol Dahiana Reyes Arango · Proyecto final computación avanzada</span>
+    </footer>
+  </div>
+
+  <script>
+    let chartInstance = null;
+
+    function aHoraColombia(isoString) {
+      if (!isoString) return '--';
+      const fecha = new Date(isoString);
+      return new Intl.DateTimeFormat('es-CO', {
+        timeZone: 'America/Bogota',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).format(fecha);
+    }
+
+    function mostrarError(mensaje) {
+      const box = document.getElementById('errorBox');
+      box.textContent = `[FALLO DE SISTEMA] ${mensaje}`;
+      box.style.display = 'block';
+    }
+
+    function ocultarError() {
+      const box = document.getElementById('errorBox');
+      box.style.display = 'none';
+      box.textContent = '';
+    }
+
+    async function cargarPronostico() {
+      const horas = document.getElementById('horasSelect').value;
+      const btn = document.getElementById('btnActualizar');
+      const estado = document.getElementById('estadoCarga');
+
+      ocultarError();
+      btn.disabled = true;
+      estado.textContent = 'PROCESANDO SERIE...';
+
+      try {
+        const respuesta = await fetch(`/api/prediccion?horas=${horas}&historia=48&confianza=0.95`);
+        const datos = await respuesta.json();
+
+        if (!respuesta.ok) {
+          throw new Error(datos.detail || `Error HTTP ${respuesta.status}`);
+        }
+
+        actualizarKPIs(datos);
+        dibujarGrafica(datos);
+        estado.textContent = `ULTIMA ACTUALIZACIÓN · ${aHoraColombia(new Date().toISOString())}`;
+      } catch (err) {
+        mostrarError(err.message);
+        estado.textContent = 'ERROR DE CONEXIÓN';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function actualizarKPIs(datos) {
+      const hist = datos.historico || [];
+      const pred = datos.prediccion || [];
+
+      if (pred.length > 0) {
+        const primera = pred[0];
+        document.getElementById('kpiProxima').textContent = primera.prediccion.toFixed(2);
+        document.getElementById('kpiProximaHora').textContent = `${aHoraColombia(primera.tiempo)}`;
+
+        const maxItem = pred.reduce((max, item) => item.prediccion > max.prediccion ? item : max, pred[0]);
+        document.getElementById('kpiMaximo').textContent = maxItem.prediccion.toFixed(2);
+        document.getElementById('kpiMaximoHora').textContent = `${aHoraColombia(maxItem.tiempo)}`;
+      }
+
+      if (hist.length > 0) {
+        const ultimo = hist[hist.length - 1];
+        document.getElementById('kpiUltimo').textContent = ultimo.valor.toFixed(2);
+        document.getElementById('kpiUltimoHora').textContent = `${aHoraColombia(datos.ultima_observacion)}`;
+      }
+
+      const rellenadas = datos.horas_rellenadas ?? 0;
+      document.getElementById('kpiRellenadas').textContent = `${rellenadas} h`;
+      document.getElementById('kpiContexto').textContent = rellenadas > 0
+        ? `Aviso: ${rellenadas} huecos interpolados`
+        : `Íntegra (${datos.horas_contexto_usadas} h ventana)`;
+    }
+
+    function dibujarGrafica(datos) {
+      const hist = datos.historico || [];
+      const pred = datos.prediccion || [];
+
+      const etiquetas = [
+        ...hist.map(d => aHoraColombia(d.tiempo)),
+        ...pred.map(d => aHoraColombia(d.tiempo))
+      ];
+
+      const nHist = hist.length;
+      const nPred = pred.length;
+      const ultimoValorHist = nHist > 0 ? hist[nHist - 1].valor : null;
+
+      const serieHistorico = [
+        ...hist.map(d => d.valor),
+        ...Array(nPred).fill(null)
+      ];
+
+      const paddingHist = nHist > 0 ? Array(nHist - 1).fill(null) : [];
+      const puntoUnion = nHist > 0 ? [ultimoValorHist] : [];
+
+      const seriePrediccion = [...paddingHist, ...puntoUnion, ...pred.map(d => d.prediccion)];
+      const serieSuperior = [...paddingHist, ...puntoUnion, ...pred.map(d => d.limite_superior)];
+      const serieInferior = [...paddingHist, ...puntoUnion, ...pred.map(d => d.limite_inferior)];
+
+      const ctx = document.getElementById('graficaPronostico').getContext('2d');
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: etiquetas,
+          datasets: [
+            {
+              label: 'Histórico (InfluxDB)',
+              data: serieHistorico,
+              borderColor: '#121212',
+              backgroundColor: '#121212',
+              borderWidth: 2.5,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              tension: 0.15
+            },
+            {
+              label: 'Pronóstico SARIMA',
+              data: seriePrediccion,
+              borderColor: '#7c0048',
+              backgroundColor: '#7c0048',
+              borderWidth: 2.8,
+              borderDash: [6, 4],
+              pointRadius: 3.5,
+              pointStyle: 'rectRot',
+              tension: 0.15
+            },
+            {
+              label: 'Banda superior (95%)',
+              data: serieSuperior,
+              borderColor: 'rgba(255, 77, 0, 0.45)',
+              backgroundColor: 'rgba(255, 77, 0, 0.14)',
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: '+1',
+              tension: 0.15
+            },
+            {
+              label: 'Banda inferior (95%)',
+              data: serieInferior,
+              borderColor: 'rgba(255, 77, 0, 0.45)',
+              backgroundColor: 'transparent',
+              borderWidth: 1,
+              pointRadius: 0,
+              fill: false,
+              tension: 0.15
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                font: { family: "'JetBrains Mono', monospace", size: 11, weight: 'bold' },
+                color: '#121212',
+                usePointStyle: true
+              }
+            },
+            tooltip: {
+              backgroundColor: '#121212',
+              titleFont: { family: "'JetBrains Mono', monospace" },
+              bodyFont: { family: "'JetBrains Mono', monospace" },
+              cornerRadius: 0,
+              callbacks: {
+                label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '--'}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: '#e5e2dc' },
+              ticks: {
+                maxTicksLimit: 10,
+                color: '#121212',
+                font: { family: "'JetBrains Mono', monospace", size: 11 }
+              },
+              title: {
+                display: true,
+                text: 'TIEMPO LOCAL COLOMBIA (UTC-5)',
+                color: '#121212',
+                font: { family: "'JetBrains Mono', monospace", size: 11, weight: 'bold' }
+              }
+            },
+            y: {
+              grid: { color: '#e5e2dc' },
+              ticks: {
+                color: '#121212',
+                font: { family: "'JetBrains Mono', monospace", size: 11 }
+              },
+              title: {
+                display: true,
+                text: 'CONSUMO TOTAL',
+                color: '#121212',
+                font: { family: "'JetBrains Mono', monospace", size: 11, weight: 'bold' }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    document.getElementById('horasSelect').addEventListener('change', cargarPronostico);
+    window.addEventListener('DOMContentLoaded', cargarPronostico);
+  </script>
 </body>
 </html>
